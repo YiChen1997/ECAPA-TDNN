@@ -29,7 +29,7 @@ parser.add_argument('--save_path',  type=str,   default="exps/exp-tc",          
 parser.add_argument('--initial_model',  type=str,   default="",                                          help='Path of the initial_model')
 
 ## Model and Loss settings
-parser.add_argument('--C',       type=int,   default=80,   help='Channel size for the speaker encoder')
+parser.add_argument('--C',       type=int,   default=1024,   help='Channel size for the speaker encoder')
 parser.add_argument('--m',       type=float, default=0.2,    help='Loss margin in AAM softmax')
 parser.add_argument('--s',       type=float, default=30,     help='Loss scale in AAM softmax')
 parser.add_argument('--n_class', type=int,   default=5994,   help='Number of speakers')

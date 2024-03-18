@@ -189,7 +189,9 @@ class MegaBlock(nn.Module):
                 dilation=1,
             ),
             nn.BatchNorm1d(channels[-1], eps=1e-3),  # 默认值 , momentum=0.1
-            se(output_size, reduction=se_reduction)
+            # bottleneck = se_reduction
+            se(output_size)
+            # se(output_size, reduction=se_reduction)
         )
 
         # Define the final skip connection

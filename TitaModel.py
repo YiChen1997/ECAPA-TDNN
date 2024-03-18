@@ -6,8 +6,8 @@ import numpy
 import soundfile
 import torch
 import torch.nn as nn
-from functools import partial
 import torch.nn.functional as F
+from calflops import calculate_flops
 from encoder_decoder import Encoder, Decoder
 from loss import AAMsoftmax
 from tools import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
@@ -116,6 +116,19 @@ class TitaNet(nn.Module):
                              " Loss: %.5f, ACC: %2.2f%% \r" % (loss / (num), top1 / index * len(labels)))
             sys.stderr.flush()
         sys.stdout.write("\n")
+
+        if epoch % 10 == 0 or epoch == 1:
+            input_shape = (1, 80, 506)
+            model = nn.Sequential(
+                self.encoder,
+                self.decoder
+            )
+            flops, macs, params = calculate_flops(model=model,
+                                                  input_shape=input_shape,
+                                                  print_detailed=False,
+                                                  output_as_string=True,
+                                                  output_precision=4)
+            print(f"Model FLOPs: {flops}   MACs: {macs}   Params: {params} \n")
         return loss / num, lr, top1 / index * len(labels)
 
     def eval_network(self, eval_list, eval_path):
