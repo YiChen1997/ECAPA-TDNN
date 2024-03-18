@@ -112,7 +112,7 @@ class Encoder(nn.Module):
         self.epilog = ConvBlock1d(hidden_size, output_size, epilog_kernel_size)
         self.apply(lambda x: init_weights(x, mode=init_mode))
 
-    def forward(self, spectrograms, aug=True):
+    def forward(self, spectrograms, aug=False):
         """
         Given input spectrograms of shape [B, M, T], return encodings
         of shape [B, DE, T]

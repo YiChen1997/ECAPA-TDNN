@@ -72,7 +72,6 @@ class TitaNet(nn.Module):
         para2 = sum(param.numel() for param in self.decoder.parameters()) / 1024 / 1024
         print(" Model para number = %.2f" % (para1 + para2))
 
-
     def forward(self, spectrograms, speakers=None):
         """
         Given input spectrograms of shape [B, M, T], TitaNet returns
@@ -103,7 +102,7 @@ class TitaNet(nn.Module):
         for num, (data, labels) in enumerate(loader, start=1):
             self.zero_grad()
             labels = torch.LongTensor(labels).to(self.device)
-            encodings = self.encoder.forward(data.to(self.device))
+            encodings = self.encoder.forward(data.to(self.device), aug=True)
             speaker_embedding = self.decoder.forward(encodings)
             nloss, prec = self.speaker_loss.forward(speaker_embedding, labels)
             nloss.backward()
@@ -117,18 +116,18 @@ class TitaNet(nn.Module):
             sys.stderr.flush()
         sys.stdout.write("\n")
 
-        if epoch % 10 == 0 or epoch == 1:
-            input_shape = (1, 80, 506)
-            model = nn.Sequential(
-                self.encoder,
-                self.decoder
-            )
-            flops, macs, params = calculate_flops(model=model,
-                                                  input_shape=input_shape,
-                                                  print_detailed=False,
-                                                  output_as_string=True,
-                                                  output_precision=4)
-            print(f"Model FLOPs: {flops}   MACs: {macs}   Params: {params} \n")
+        # if epoch % 10 == 0 or epoch == 1:
+        #     input_shape = (1, 80, 506)
+        #     model = nn.Sequential(
+        #         self.encoder,
+        #         self.decoder
+        #     )
+        #     # flops, macs, params = calculate_flops(model=model,
+        #     #                                       input_shape=input_shape,
+        #     #                                       print_detailed=False,
+        #     #                                       output_as_string=True,
+        #     #                                       output_precision=4)
+        #     # print(f"Model FLOPs: {flops}   MACs: {macs}   Params: {params} \n")
         return loss / num, lr, top1 / index * len(labels)
 
     def eval_network(self, eval_list, eval_path):
