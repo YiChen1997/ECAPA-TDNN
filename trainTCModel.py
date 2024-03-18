@@ -8,12 +8,12 @@ from dataLoader import train_loader
 from TitaModel import TitaNet
 from yc_utils import try_gpu
 
-parser = argparse.ArgumentParser(description = "ECAPA_trainer")
+parser = argparse.ArgumentParser(description = "TCnet_trainer")
 ## Training Settings
 parser.add_argument('--num_frames', type=int,   default=200,     help='Duration of the input segments, eg: 200 for 2 second')
 parser.add_argument('--max_epoch',  type=int,   default=80,      help='Maximum number of epochs')
-parser.add_argument('--batch_size', type=int,   default=96,     help='Batch size')
-parser.add_argument('--n_cpu',      type=int,   default=6,       help='Number of loader threads')
+parser.add_argument('--batch_size', type=int,   default=32,     help='Batch size')
+parser.add_argument('--n_cpu',      type=int,   default=8,       help='Number of loader threads')
 parser.add_argument('--test_step',  type=int,   default=1,       help='Test and save every [test_step] epochs')
 parser.add_argument('--lr',         type=float, default=0.001,   help='Learning rate')
 parser.add_argument("--lr_decay",   type=float, default=0.97,    help='Learning rate decay every [test_step] epochs')
@@ -25,11 +25,11 @@ parser.add_argument('--eval_list',  type=str,   default="/data/data/VoxCeleb1Dat
 parser.add_argument('--eval_path',  type=str,   default="/data/data/VoxCeleb1Dataset/wav",                    help='The path of the evaluation data, eg:"/data08/VoxCeleb1/test/wav" in my case')
 parser.add_argument('--musan_path', type=str,   default="/data/data/musan_split",                    help='The path to the MUSAN set, eg:"/data08/Others/musan_split" in my case')
 parser.add_argument('--rir_path',   type=str,   default="/data/data/rirs/RIRS_NOISES/simulated_rirs",     help='The path to the RIR set, eg:"/data08/Others/RIRS_NOISES/simulated_rirs" in my case');
-parser.add_argument('--save_path',  type=str,   default="exps/exp-tc",                                     help='Path to save the score.txt and models')
+parser.add_argument('--save_path',  type=str,   default="exps/exp-tcn",                                     help='Path to save the score.txt and models')
 parser.add_argument('--initial_model',  type=str,   default="",                                          help='Path of the initial_model')
 
 ## Model and Loss settings
-parser.add_argument('--C',       type=int,   default=1024,   help='Channel size for the speaker encoder')
+parser.add_argument('--C',       type=int,   default=80,   help='Channel size for the speaker encoder')
 parser.add_argument('--m',       type=float, default=0.2,    help='Loss margin in AAM softmax')
 parser.add_argument('--s',       type=float, default=30,     help='Loss scale in AAM softmax')
 parser.add_argument('--n_class', type=int,   default=5994,   help='Number of speakers')
