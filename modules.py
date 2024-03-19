@@ -218,3 +218,143 @@ class AttentiveStatsPooling(nn.Module):
         # utterance-level features
         # [[B, DE]; [B, DE]] -> [B, DE * 2]
         return torch.cat([means, stds], dim=1)
+
+
+class AttentivePoolLayer(nn.Module):
+    """
+    Attention pooling layer for pooling speaker embeddings
+    Reference: ECAPA-TDNN Embeddings for Speaker Diarization (https://arxiv.org/pdf/2104.01466.pdf)
+    inputs:
+        inp_filters: input feature channel length from encoder
+        attention_channels: intermediate attention channel size
+        kernel_size: kernel_size for TDNN and attention conv1d layers (default: 1)
+        dilation: dilation size for TDNN and attention conv1d layers  (default: 1)
+    """
+
+    def __init__(
+        self,
+        inp_filters: int,
+        attention_channels: int = 128,
+        kernel_size: int = 1,
+        dilation: int = 1,
+        eps: float = 1e-10,
+    ):
+        super().__init__()
+
+        self.feat_in = 2 * inp_filters
+
+        self.attention_layer = nn.Sequential(
+            TDNNModule(inp_filters * 3, attention_channels, kernel_size=kernel_size, dilation=dilation),
+            nn.Tanh(),
+            nn.Conv1d(
+                in_channels=attention_channels, out_channels=inp_filters, kernel_size=kernel_size, dilation=dilation,
+            ),
+        )
+        self.eps = eps
+
+    def forward(self, x, length=None):
+        max_len = x.size(2)
+
+        if length is None:
+            length = torch.ones(x.shape[0], device=x.device)
+
+        mask, num_values = lens_to_mask(length, max_len=max_len, device=x.device)
+
+        # encoder statistics
+        mean, std = get_statistics_with_mask(x, mask / num_values)
+        mean = mean.unsqueeze(2).repeat(1, 1, max_len)
+        std = std.unsqueeze(2).repeat(1, 1, max_len)
+        attn = torch.cat([x, mean, std], dim=1)
+
+        # attention statistics
+        attn = self.attention_layer(attn)  # attention pass
+        attn = attn.masked_fill(mask == 0, -inf)
+        alpha = F.softmax(attn, dim=2)  # attention values, α
+        mu, sg = get_statistics_with_mask(x, alpha)  # µ and ∑
+
+        # gather
+        return torch.cat((mu, sg), dim=1).unsqueeze(2)
+
+
+class TDNNModule(nn.Module):
+    """
+    Time Delayed Neural Module (TDNN) - 1D
+    input:
+        inp_filters: input filter channels for conv layer
+        out_filters: output filter channels for conv layer
+        kernel_size: kernel weight size for conv layer
+        dilation: dilation for conv layer
+        stride: stride for conv layer
+        padding: padding for conv layer (default None: chooses padding value such that input and output feature shape matches)
+    output:
+        tdnn layer output
+    """
+
+    def __init__(
+        self,
+        inp_filters: int,
+        out_filters: int,
+        kernel_size: int = 1,
+        dilation: int = 1,
+        stride: int = 1,
+        padding: int = None,
+    ):
+        super().__init__()
+        if padding is None:
+            padding = get_same_padding(kernel_size, stride=stride, dilation=dilation)
+
+        self.conv_layer = nn.Conv1d(
+            in_channels=inp_filters,
+            out_channels=out_filters,
+            kernel_size=kernel_size,
+            dilation=dilation,
+            padding=padding,
+        )
+
+        self.activation = nn.ReLU()
+        self.bn = nn.BatchNorm1d(out_filters)
+
+    def forward(self, x, length=None):
+        x = self.conv_layer(x)
+        x = self.activation(x)
+        return self.bn(x)
+
+
+def lens_to_mask(lens: List[int], max_len: int, device: str = None):
+    """
+    outputs masking labels for list of lengths of audio features, with max length of any
+    mask as max_len
+    input:
+        lens: list of lens
+        max_len: max length of any audio feature
+    output:
+        mask: masked labels
+        num_values: sum of mask values for each feature (useful for computing statistics later)
+    """
+    lens_mat = torch.arange(max_len).to(device)
+    mask = lens_mat[:max_len].unsqueeze(0) < lens.unsqueeze(1)
+    mask = mask.unsqueeze(1)
+    num_values = torch.sum(mask, dim=2, keepdim=True)
+    return mask, num_values
+
+
+def get_statistics_with_mask(x: torch.Tensor, m: torch.Tensor, dim: int = 2, eps: float = 1e-10):
+    """
+    compute mean and standard deviation of input(x) provided with its masking labels (m)
+    input:
+        x: feature input
+        m: averaged mask labels
+    output:
+        mean: mean of input features
+        std: stadard deviation of input features
+    """
+    mean = torch.sum((m * x), dim=dim)
+    std = torch.sqrt((m * (x - mean.unsqueeze(dim)).pow(2)).sum(dim).clamp(eps))
+    return mean, std
+
+
+def get_same_padding(kernel_size, stride, dilation) -> int:
+    if stride > 1 and dilation > 1:
+        raise ValueError("Only stride OR dilation may be greater than 1")
+    return (dilation * (kernel_size - 1)) // 2
+

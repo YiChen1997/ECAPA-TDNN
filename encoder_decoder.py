@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torchaudio
 
 from model import SEModule, PreEmphasis, FbankAug
-from modules import ConvBlock1d, Squeeze, DepthWiseConv1d, AttentiveStatsPooling
+from modules import ConvBlock1d, Squeeze, DepthWiseConv1d, AttentiveStatsPooling, AttentivePoolLayer
 from yc_utils import init_weights
 
 
@@ -79,7 +79,7 @@ class Encoder(nn.Module):
             mega_block_kernel_sizes,  # mega_block_kernel_size
             prolog_kernel_size=3,
             epilog_kernel_size=1,
-            se_reduction=16,
+            se_reduction=8,
             dropout=0.5,
             init_mode: Optional[str] = 'xavier_uniform',
     ):
@@ -93,14 +93,19 @@ class Encoder(nn.Module):
         self.specaug = FbankAug()  # Spec augmentation
 
         # Define encoder as sequence of prolog, mega blocks and epilog
-        self.prolog = ConvBlock1d(n_mels, hidden_size, prolog_kernel_size)
+        self.prolog = nn.Sequential(
+            DepthWiseConv1d(n_mels, hidden_size, prolog_kernel_size),
+            nn.BatchNorm1d(hidden_size, eps=1e-3),
+            SEModule(hidden_size),
+            nn.ReLU(),
+        )
         self.mega_blocks = nn.Sequential(
             *[
                 MegaBlock(
                     hidden_size,
                     hidden_size,
                     # mega_block_kernel_size,  # kernel_size
-                    mega_block_kernel_sizes[_],  # mega_block_kernel_sizes = [3, 7, 11, 15]
+                    mega_block_kernel_sizes[_],  # mega_block_kernel_sizes = [7, 11, 15]
                     n_sub_blocks,  # n_sub_blocks
                     se_reduction=se_reduction,
                     dropout=dropout,
@@ -109,7 +114,12 @@ class Encoder(nn.Module):
                 for _ in range(len(mega_block_kernel_sizes))
             ]
         )
-        self.epilog = ConvBlock1d(hidden_size, output_size, epilog_kernel_size)
+        self.epilog = nn.Sequential(
+            DepthWiseConv1d(hidden_size, output_size, epilog_kernel_size),
+            nn.BatchNorm1d(output_size),
+            SEModule(output_size),
+            nn.ReLU(),
+        )
         self.apply(lambda x: init_weights(x, mode=init_mode))
 
     def forward(self, spectrograms, aug=False):
@@ -157,7 +167,7 @@ class MegaBlock(nn.Module):
             output_size,
             kernel_size,
             n_sub_blocks,
-            se_reduction=16,
+            se_reduction=8,
             dropout=0.5,
             se_res2block=False,
     ):
@@ -190,7 +200,7 @@ class MegaBlock(nn.Module):
             ),
             nn.BatchNorm1d(channels[-1], eps=1e-3),  # 默认值 , momentum=0.1
             # bottleneck = se_reduction
-            se(output_size)
+            se(output_size, bottleneck=input_size // se_reduction)
             # se(output_size, reduction=se_reduction)
         )
 
@@ -222,7 +232,7 @@ def affine_layer(
 ):
     if affine_type == 'conv':
         layer = nn.Sequential(
-            # nn.BatchNorm1d(inp_shape, affine=True, track_running_stats=True),
+            nn.BatchNorm1d(inp_shape, affine=True, track_running_stats=True),
             nn.Conv1d(inp_shape, out_shape, kernel_size=1),
         )
 
@@ -267,11 +277,13 @@ class Decoder(nn.Module):
                 nn.Linear(encoder_output_size, encoder_output_size),
             )
         elif pool_mode == 'attention_stats':
-            self.pool = nn.Sequential(
-                AttentiveStatsPooling(encoder_output_size, attention_hidden_size),
-                # nn.BatchNorm1d(encoder_output_size),  # 应该是已经设置成了3072，实际上回到了在通道维度有cat
-                nn.BatchNorm1d(encoder_output_size * 2),
-            )
+            # self.pool = nn.Sequential(
+            #     AttentiveStatsPooling(encoder_output_size, attention_hidden_size),
+            #     # nn.BatchNorm1d(encoder_output_size),  # 应该是已经设置成了3072，实际上回到了在通道维度有cat
+            #     nn.BatchNorm1d(encoder_output_size * 2),
+            # )
+            self.pool = AttentivePoolLayer(inp_filters=encoder_output_size, attention_channels=attention_hidden_size)
+            self.affine_type = 'conv'
 
         # Define the final classifier
         self.linear = affine_layer(encoder_output_size * 2, embedding_size, affine_type=self.affine_type)

@@ -26,10 +26,10 @@ class TitaNet(nn.Module):
     TARGET_PARAMS = {"s": 6.4, "m": 13.4, "l": 25.3}
 
     def __init__(self, lr, lr_decay, C, n_class, m, s, test_step,
-                 n_mega_blocks=4, n_sub_blocks=3, encoder_output_size=1536, embedding_size=192,
+                 n_mega_blocks=4, n_sub_blocks=3, encoder_output_size=3072, embedding_size=192,
                  encoder_hidden_size=256, mega_block_kernel_sizes=None,
                  prolog_kernel_size=3, epilog_kernel_size=1,
-                 attention_hidden_size=128, se_reduction=16, pool_mode='attention_stats',
+                 attention_hidden_size=128, se_reduction=8, pool_mode='attention_stats',
                  dropout=0.5, device="cpu",
                  **kwargs
                  ):
