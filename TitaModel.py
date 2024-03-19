@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from calflops import calculate_flops
 from encoder_decoder import Encoder, Decoder
 from loss import AAMsoftmax
-from tools import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
+from tools import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf, try_gpu
 
 
 class TitaNet(nn.Module):
@@ -104,6 +104,49 @@ class TitaNet(nn.Module):
             labels = torch.LongTensor(labels).to(self.device)
             encodings = self.encoder.forward(data.to(self.device), aug=True)
             speaker_embedding = self.decoder.forward(encodings)
+            nloss, prec = self.speaker_loss.forward(speaker_embedding, labels)
+            nloss.backward()
+            self.optim.step()
+            index += len(labels)
+            top1 += prec
+            loss += nloss.detach().cpu().numpy()
+            sys.stderr.write(time.strftime("%m-%d %H:%M:%S") + \
+                             " [%2d] Lr: %5f, Training: %.2f%%, " % (epoch, lr, 100 * (num / loader.__len__())) +
+                             " Loss: %.5f, ACC: %2.2f%% \r" % (loss / (num), top1 / index * len(labels)))
+            sys.stderr.flush()
+        sys.stdout.write("\n")
+
+        # if epoch % 10 == 0 or epoch == 1:
+        #     input_shape = (1, 80, 506)
+        #     model = nn.Sequential(
+        #         self.encoder,
+        #         self.decoder
+        #     )
+        #     # flops, macs, params = calculate_flops(model=model,
+        #     #                                       input_shape=input_shape,
+        #     #                                       print_detailed=False,
+        #     #                                       output_as_string=True,
+        #     #                                       output_precision=4)
+        #     # print(f"Model FLOPs: {flops}   MACs: {macs}   Params: {params} \n")
+        return loss / num, lr, top1 / index * len(labels)
+
+    def train_parallel_network(self, epoch, loader):
+        devices = [try_gpu(i) for i in range(2)]
+        # net = nn.Sequential(self.encoder,
+        #                     self.decoder)
+
+        self.train()
+        encoder = nn.DataParallel(self.encoder, device_ids=devices)
+        decoder = nn.DataParallel(self.decoder, device_ids=devices)
+        device = devices[0]
+        self.scheduler.step(epoch - 1)
+        index, top1, loss = 0, 0, 0
+        lr = self.optim.param_groups[0]['lr']
+        for num, (data, labels) in enumerate(loader, start=1):
+            self.zero_grad()
+            labels = torch.LongTensor(labels).to(device)
+            encodings = encoder.forward(data.to(device), aug=True)
+            speaker_embedding = decoder.forward(encodings)
             nloss, prec = self.speaker_loss.forward(speaker_embedding, labels)
             nloss.backward()
             self.optim.step()

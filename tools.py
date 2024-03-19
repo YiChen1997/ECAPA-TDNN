@@ -100,3 +100,10 @@ def accuracy(output, target, topk=(1,)):
 		res.append(correct_k.mul_(100.0 / batch_size))
 	
 	return res
+
+
+def try_gpu(i=0):
+    """如果存在，则返回gpu(i)，否则返回cpu()"""
+    if torch.cuda.device_count() >= i + 1:
+        return torch.device(f'cuda:{i}')
+    return torch.device('cpu')
