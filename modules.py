@@ -7,7 +7,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from numpy import inf
+from typing import List
 
 class Conv1dSamePadding(nn.Conv1d):
     """
