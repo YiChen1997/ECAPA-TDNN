@@ -7,7 +7,6 @@ import soundfile
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from calflops import calculate_flops
 from CamppEncoder import CamEncoder
 from loss import AAMsoftmax
 from tools import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf, try_gpu
@@ -22,7 +21,7 @@ class CamPP(nn.Module):
         self.encoder = CamEncoder(n_mels=C)
 
         # Store loss function
-        self.speaker_loss = AAMsoftmax(n_class=n_class, m=m, s=s)
+        self.speaker_loss = AAMsoftmax(n_class=n_class, m=m, s=s, embedding_size=512)
         self.optim = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=2e-5)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=test_step, gamma=lr_decay)
         self.device = device
