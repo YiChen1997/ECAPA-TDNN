@@ -9,16 +9,16 @@ from TitaModel import TitaNet
 from yc_utils import try_gpu
 
 parser = argparse.ArgumentParser(description = "TCnet_trainer")
-## Training Settings
+# Training Settings
 parser.add_argument('--num_frames', type=int,   default=200,     help='Duration of the input segments, eg: 200 for 2 second')
-parser.add_argument('--max_epoch',  type=int,   default=80,      help='Maximum number of epochs')
+parser.add_argument('--max_epoch',  type=int,   default=180,      help='Maximum number of epochs')
 parser.add_argument('--batch_size', type=int,   default=32,     help='Batch size')
 parser.add_argument('--n_cpu',      type=int,   default=8,       help='Number of loader threads')
 parser.add_argument('--test_step',  type=int,   default=1,       help='Test and save every [test_step] epochs')
 parser.add_argument('--lr',         type=float, default=0.001,   help='Learning rate')
 parser.add_argument("--lr_decay",   type=float, default=0.97,    help='Learning rate decay every [test_step] epochs')
 
-## Training and evaluation path/lists, save path
+# Training and evaluation path/lists, save path
 parser.add_argument('--train_list', type=str,   default="/data/data/VoxCeleb2Dataset/train_list.txt",     help='The path of the training list, https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/train_list.txt')
 parser.add_argument('--train_path', type=str,   default="/data/data/VoxCeleb2Dataset/wav",                    help='The path of the training data, eg:"/data08/VoxCeleb2/train/wav" in my case')
 parser.add_argument('--eval_list',  type=str,   default="/data/data/VoxCeleb1Dataset/veri_test2.txt",              help='The path of the evaluation list, veri_test2.txt comes from https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/veri_test2.txt')
@@ -28,31 +28,31 @@ parser.add_argument('--rir_path',   type=str,   default="/data/data/rirs/RIRS_NO
 parser.add_argument('--save_path',  type=str,   default="exps/exp-tcn",                                     help='Path to save the score.txt and models')
 parser.add_argument('--initial_model',  type=str,   default="",                                          help='Path of the initial_model')
 
-## Model and Loss settings
+# Model and Loss settings
 parser.add_argument('--C',       type=int,   default=80,   help='Channel size for the speaker encoder')
 parser.add_argument('--m',       type=float, default=0.2,    help='Loss margin in AAM softmax')
 parser.add_argument('--s',       type=float, default=30,     help='Loss scale in AAM softmax')
 parser.add_argument('--n_class', type=int,   default=5994,   help='Number of speakers')
 parser.add_argument('--device', type=torch.device,   default=try_gpu(0),   help='Number of speakers')
 
-## Command
+# Command
 parser.add_argument('--eval',    dest='eval', action='store_true', help='Only do evaluation')
 
-## Initialization
+# Initialization
 warnings.simplefilter("ignore")
 torch.multiprocessing.set_sharing_strategy('file_system')
 args = parser.parse_args()
 args = init_args(args)
 
-## Define the data loader
+# Define the data loader
 trainloader = train_loader(**vars(args))
 trainLoader = torch.utils.data.DataLoader(trainloader, batch_size = args.batch_size, shuffle = True, num_workers = args.n_cpu, drop_last = True)
 
-## Search for the exist models
+# Search for the exist models
 modelfiles = glob.glob('%s/model_0*.model'%args.model_save_path)
 modelfiles.sort()
 
-## Only do evaluation, the initial_model is necessary
+# Only do evaluation, the initial_model is necessary
 if args.eval == True:
 	s = TitaNet(**vars(args))
 	print("Model %s loaded from previous state!"%args.initial_model)
@@ -61,20 +61,20 @@ if args.eval == True:
 	print("EER %2.2f%%, minDCF %.4f%%"%(EER, minDCF))
 	quit()
 
-## If initial_model is exist, system will train from the initial_model
+# If initial_model is exist, system will train from the initial_model
 if args.initial_model != "":
 	print("Model %s loaded from previous state!"%args.initial_model)
 	s = TitaNet(**vars(args))
 	s.load_parameters(args.initial_model)
 	epoch = 1
 
-## Otherwise, system will try to start from the saved model&epoch
+# Otherwise, system will try to start from the saved model&epoch
 elif len(modelfiles) >= 1:
 	print("Model %s loaded from previous state!"%modelfiles[-1])
 	epoch = int(os.path.splitext(os.path.basename(modelfiles[-1]))[0][6:]) + 1
 	s = TitaNet(**vars(args))
 	s.load_parameters(modelfiles[-1])
-## Otherwise, system will train from scratch
+# Otherwise, system will train from scratch
 else:
 	epoch = 1
 	s = TitaNet(**vars(args))
@@ -83,10 +83,10 @@ EERs = []
 score_file = open(args.score_save_path, "a+")
 
 while(1):
-	## Training for one epoch
+	# Training for one epoch
 	loss, lr, acc = s.train_network(epoch = epoch, loader = trainLoader)
 
-	## Evaluation every [test_step] epochs
+	# Evaluation every [test_step] epochs
 	if epoch % args.test_step == 0:
 		s.save_parameters(args.model_save_path + "/model_%04d.model"%epoch)
 		EERs.append(s.eval_network(eval_list = args.eval_list, eval_path = args.eval_path)[0])
