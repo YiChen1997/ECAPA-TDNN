@@ -3,9 +3,10 @@ This is the main code of the ECAPATDNN project, to define the parameters and bui
 '''
 
 import argparse, glob, os, torch, warnings, time
+
+from CamppModel import CamPP
 from tools import *
 from dataLoader import train_loader
-from TitaModel import TitaNet
 from yc_utils import try_gpu
 
 parser = argparse.ArgumentParser(description = "ECAPA_trainer")
@@ -54,7 +55,7 @@ modelfiles.sort()
 
 # Only do evaluation, the initial_model is necessary
 if args.eval == True:
-	s = TitaNet(**vars(args))
+	s = CamPP(**vars(args))
 	print("Model %s loaded from previous state!"%args.initial_model)
 	s.load_parameters(args.initial_model)
 	EER, minDCF = s.eval_network(eval_list = args.eval_list, eval_path = args.eval_path)
@@ -64,7 +65,7 @@ if args.eval == True:
 # If initial_model is exist, system will train from the initial_model
 if args.initial_model != "":
 	print("Model %s loaded from previous state!"%args.initial_model)
-	s = TitaNet(**vars(args))
+	s = CamPP(**vars(args))
 	s.load_parameters(args.initial_model)
 	epoch = 1
 
@@ -72,12 +73,12 @@ if args.initial_model != "":
 elif len(modelfiles) >= 1:
 	print("Model %s loaded from previous state!"%modelfiles[-1])
 	epoch = int(os.path.splitext(os.path.basename(modelfiles[-1]))[0][6:]) + 1
-	s = TitaNet(**vars(args))
+	s = CamPP(**vars(args))
 	s.load_parameters(modelfiles[-1])
 # Otherwise, system will train from scratch
 else:
 	epoch = 1
-	s = TitaNet(**vars(args))
+	s = CamPP(**vars(args))
 
 EERs = []
 score_file = open(args.score_save_path, "a+")
